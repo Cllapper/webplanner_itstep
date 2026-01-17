@@ -4,7 +4,7 @@
 <h2>Редактирование</h2>
 <p class="muted small">ID: {{ task.get("_id") }}</p>
 
-<form class="box" method="post" action="{{ url_for('task_edit_submit', task_id=task.get('_id')) }}">
+<form class="box" method="post" action="{{ url_for('task_edit_submit', task_id=task.get('_id')) }}" enctype="multipart/form-data">
   <!-- чтобы вернуться в тот же период -->
   <input type="hidden" name="view" value="{{ view }}">
   <input type="hidden" name="date" value="{{ d }}">
@@ -39,6 +39,32 @@
     <input type="hidden" name="done" value="0">
     <input type="checkbox" name="done" value="1" {{ "checked" if task.get("done") else "" }}>
     <span>Выполнено</span>
+  </label>
+  {% set att = task.get("attachment") %}
+  <h3>Файл</h3>
+
+  {% if att %}
+    {% set fid = file_id_from_attachment(att) %}
+    <div class="row">
+      <span class="muted small">{{ att.get("filename","file") }}</span>
+      {% if fid %}
+        <a class="btn" href="{{ url_for('file_download', file_id=fid) }}">Скачать</a>
+        <form method="post" action="{{ url_for('file_delete', file_id=fid) }}" style="display:inline;">
+            <button type="submit" title="Удалить файл">Удалить файл</button>
+          </form>
+      {% endif %}
+    </div>
+
+    <label class="row">
+      <input type="checkbox" name="remove_attachment" value="1">
+      <span>Убрать прикрепление из задачи (не удаляя файл)</span>
+    </label>
+  {% else %}
+    <p class="muted">Файл не прикреплён.</p>
+  {% endif %}
+
+  <label>Загрузить новый файл (заменит текущий)
+    <input type="file" name="file">
   </label>
 
   <button type="submit">Сохранить задачу</button>

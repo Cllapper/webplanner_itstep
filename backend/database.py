@@ -23,7 +23,9 @@ class DBManager:
         self.client = client
         self.users = client['users']
         self.tasks = client['tasks']
+        self.files = client["files"]
 
+    # ----------------- ЮЗЕРЫ -------------
     def create_user(self, username, password):
         if self.get_user(username) is not None:
             return None
@@ -52,7 +54,10 @@ class DBManager:
             return {"ok": False, "error": "User not found"}
 
         return {"ok": True, "token": token}
+    # -------------------------------
 
+
+    # --------- ТАСКИ ----------
     def create_task(self, user_id: str, task_data: dict) -> str:
         doc = dict(task_data)
 
@@ -172,9 +177,9 @@ class DBManager:
 
         docs = list(self.tasks.find(query).sort("due_date", 1))
         return [self._serialize_task(d) for d in docs]
+    # -----------------------
 
-
-
+    # -------- САБТАСКИ --------
     def add_subtask(self, user_id: str, task_id: str, title: str) -> dict:
         try:
             oid = ObjectId(task_id)
@@ -239,3 +244,21 @@ class DBManager:
             return {"ok": False, "error": "Subtask not found"}
 
         return {"ok": True}
+    # --------------------------
+    # ------- ФАЙЛЫ -------------
+    def create_file_record(self, user_id: str, meta: dict) -> str:
+        """
+        meta: {file_id, filename, path, content_type, size_bytes, created_at}
+        """
+        doc = dict(meta)
+        doc["user_id"] = user_id
+        res = self.files.insert_one(doc)
+        return doc["file_id"]  # возвращаем uuid, не InsertOneResult
+
+    def get_file_record(self, user_id: str, file_id: str) -> dict | None:
+        return self.files.find_one({"user_id": user_id, "file_id": file_id})
+
+    def delete_file_record(self, user_id: str, file_id: str) -> bool:
+        res = self.files.delete_one({"user_id": user_id, "file_id": file_id})
+        return res.deleted_count == 1
+    # ------------------------

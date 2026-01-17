@@ -2,7 +2,7 @@
 {% block content %}
 <h2>Новая задача</h2>
 
-<form class="box" method="post" action="{{ url_for('task_new_submit') }}">
+<form class="box" method="post" action="{{ url_for('task_new_submit') }}" enctype="multipart/form-data">
   <label>Название
     <input name="title" required>
   </label>
@@ -26,7 +26,9 @@
   <label>Комментарий
     <input name="comment">
   </label>
-
+  <label>Файл (опционально)
+    <input type="file" name="file">
+  </label>
   <label>Подзадачи (каждая с новой строки)
     <textarea name="subtasks" rows="4"></textarea>
   </label>

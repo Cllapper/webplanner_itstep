@@ -1,16 +1,26 @@
 # main.py
-from fastapi import FastAPI
-from database import DBManager
+from fastapi import FastAPI, UploadFile, File, Query
+from fastapi.responses import FileResponse
+
+from database import DBManager, _dt_now_iso
 
 from config import db_client
 import models
 
 from services import hash_utils
-import uuid
 from fastapi import Query
 
 
+import os
+import uuid
+import shutil
+from pathlib import Path
+
+
 app = FastAPI(title="Mini FastAPI")
+UPLOADS_DIR = Path("uploads")
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
 
 db = DBManager(db_client)
 
@@ -138,4 +148,103 @@ def delete_subtask(task_id: str, subtask_id: str, user_token: str = Query(...)):
     r = db.delete_subtask(user_id=str(user["_id"]), task_id=task_id, subtask_id=subtask_id)
     if not r.get("ok"):
         return {"result": r.get("error")}
+    return {"result": True}
+
+
+# --------------------- ФАЙЛЫ ----------------------------
+@app.post("/api/files")
+def upload_file(user_token: str = Query(...), file: UploadFile = File(...)):
+    user = db.get_user_by_token(user_token)
+    if user is None:
+        return {"result": "User token is incorrect"}
+
+    file_id = str(uuid.uuid4())
+
+    # Папка пользователя: uploads/<user_id>/
+    user_dir = UPLOADS_DIR / str(user["_id"])
+    user_dir.mkdir(parents=True, exist_ok=True)
+
+    # Безопасное имя файла (минимальная чистка)
+    original_name = file.filename or "file"
+    safe_name = os.path.basename(original_name).replace("\\", "_").replace("/", "_")
+
+    # Сохраняем как: <uuid>__<original>
+    disk_name = f"{file_id}__{safe_name}"
+    disk_path = user_dir / disk_name
+
+    # Пишем на диск
+    size_bytes = 0
+    with disk_path.open("wb") as out:
+        # копируем поток
+        shutil.copyfileobj(file.file, out)
+
+    try:
+        size_bytes = disk_path.stat().st_size
+    except Exception:
+        size_bytes = None
+
+    meta = {
+        "file_id": file_id,
+        "filename": safe_name,
+        "path": str(disk_path),
+        "content_type": file.content_type,
+        "size_bytes": size_bytes,
+        "created_at": _dt_now_iso(),
+    }
+    db.create_file_record(user_id=str(user["_id"]), meta=meta)
+
+    # url — наша ручка скачивания
+    url = f"/api/files/{file_id}"
+
+    return {
+        "result": True,
+        "attachment": {
+            "file_id": file_id,
+            "filename": safe_name,
+            "url": url,
+            "content_type": file.content_type,
+            "size_bytes": size_bytes,
+        }
+    }
+
+
+
+@app.get("/api/files/{file_id}")
+def download_file(file_id: str, user_token: str = Query(...)):
+    user = db.get_user_by_token(user_token)
+    if user is None:
+        return {"result": "User token is incorrect"}
+
+    rec = db.get_file_record(user_id=str(user["_id"]), file_id=file_id)
+    if rec is None:
+        return {"result": "File not found"}
+
+    path = rec.get("path")
+    filename = rec.get("filename", "file")
+
+    if not path or not os.path.exists(path):
+        return {"result": "File missing on disk"}
+
+    # FileResponse отдаёт файл как скачивание
+    return FileResponse(path, filename=filename, media_type=rec.get("content_type") or "application/octet-stream")
+
+@app.delete("/api/files/{file_id}")
+def delete_file(file_id: str, user_token: str = Query(...)):
+    user = db.get_user_by_token(user_token)
+    if user is None:
+        return {"result": "User token is incorrect"}
+
+    rec = db.get_file_record(user_id=str(user["_id"]), file_id=file_id)
+    if rec is None:
+        return {"result": "File not found"}
+
+    path = rec.get("path")
+    if path and os.path.exists(path):
+        os.remove(path)
+
+    db.delete_file_record(user_id=str(user["_id"]), file_id=file_id)
+    db.tasks.update_many(
+        {"user_id": str(user["_id"]), "attachment.file_id": file_id},
+        {"$set": {"attachment": None}}
+    )
     return {"result": True}

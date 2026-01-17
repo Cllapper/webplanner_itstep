@@ -20,8 +20,9 @@ class SubTaskUpdate(BaseModel):
     done: Optional[bool] = None
 
 class Attachment(BaseModel):
+    file_id: str
     filename: str
-    url: str                      # наприклад: "/files/abc123.pdf" або S3 URL
+    url: str
     content_type: Optional[str] = None
     size_bytes: Optional[int] = None
 

@@ -4,12 +4,15 @@ from datetime import date, datetime
 
 import requests
 from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Response
+from urllib.parse import urlparse
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET", "dev-secret-change-me")
 
 BACKEND_BASE = os.getenv("BACKEND_BASE", "http://127.0.0.1:8000").rstrip("/")
 TIMEOUT = 7
+
 
 
 def backend_url(path: str) -> str:
@@ -229,7 +232,6 @@ def tasks_all():
 def task_new_form():
     return render_template("task_form.html")
 
-
 @app.post("/tasks/new")
 @login_required
 def task_new_submit():
@@ -245,7 +247,6 @@ def task_new_submit():
         "description": (request.form.get("description", "").strip() or None),
         "comment": (request.form.get("comment", "").strip() or None),
         "tags": [t.strip() for t in request.form.get("tags", "").split(",") if t.strip()],
-        # на создании можно задать подзадачи списком (как в моделях) :contentReference[oaicite:4]{index=4}
         "subtasks": [
             {"title": line.strip(), "done": False}
             for line in request.form.get("subtasks", "").splitlines()
@@ -253,6 +254,14 @@ def task_new_submit():
         ],
         "attachment": None,
     }
+
+    file = request.files.get("file")
+    if file and file.filename:
+        try:
+            payload["attachment"] = upload_file_to_backend(file)
+        except Exception as e:
+            flash(f"Файл не загрузился: {e}", "error")
+            return redirect(url_for("task_new_form"))
 
     try:
         r = call_backend("POST", "/tasks", json=payload)
@@ -293,15 +302,29 @@ def task_edit_form(task_id: str):
 
     return render_template("task_edit.html", task=task, view=view, d=d)
 
-
 @app.post("/tasks/<task_id>/edit")
 @login_required
 def task_edit_submit(task_id: str):
     updates = {}
 
+    # убрать attachment
+    if request.form.get("remove_attachment") == "1":
+        updates["attachment"] = None
+
+    # заменить/добавить attachment
+    file = request.files.get("file")
+    if file and file.filename:
+        try:
+            updates["attachment"] = upload_file_to_backend(file)
+        except Exception as e:
+            flash(f"Файл не загрузился: {e}", "error")
+            return redirect(url_for("task_edit_form", task_id=task_id))
+
+    # дальше уже обычные поля...
     title = request.form.get("title", "").strip()
     if title:
         updates["title"] = title
+
 
     pr = request.form.get("priority", "").strip()
     if pr:
@@ -440,5 +463,133 @@ def subtask_delete(task_id: str, subtask_id: str):
         return redirect(url_for("task_edit_form", task_id=task_id, view=view, date=d))
 
 
+
+
+
+
+def upload_file_to_backend(file_storage) -> dict:
+    """
+    Отправляет файл на бэкенд: POST /api/files?user_token=...
+    Ожидает ответ вида: {"result": True, "attachment": {...}}
+    """
+    files = {
+        "file": (
+            file_storage.filename,
+            file_storage.stream,
+            file_storage.mimetype or "application/octet-stream",
+        )
+    }
+
+    r = requests.post(
+        backend_url("/api/files"),
+        params={"user_token": session["user_token"]},
+        files=files,
+        timeout=TIMEOUT,
+    )
+
+    data = r.json() if "application/json" in r.headers.get("content-type", "") else {"raw": r.text}
+    if not isinstance(data, dict) or data.get("result") is not True:
+        raise RuntimeError(f"Upload failed: {data}")
+
+    attachment = data.get("attachment")
+    if not isinstance(attachment, dict):
+        raise RuntimeError(f"No attachment in response: {data}")
+
+    return attachment
+
+
+def file_id_from_attachment(att: dict) -> str | None:
+    """
+    Пытается достать file_id из attachment.
+    Если бэк возвращает {"file_id": "..."} — берём его.
+    Иначе пытаемся распарсить из att["url"] (например /api/files/<id> или /files/<id>).
+    """
+    if not isinstance(att, dict):
+        return None
+
+    fid = att.get("file_id")
+    if isinstance(fid, str) and fid.strip():
+        return fid.strip()
+
+    url = att.get("url")
+    if not isinstance(url, str) or not url.strip():
+        return None
+
+    path = urlparse(url).path
+    parts = [p for p in path.split("/") if p]
+    if not parts:
+        return None
+
+    # ожидаем .../files/<id> или .../api/files/<id>
+    if parts[-2:] and parts[-2] == "files":
+        return parts[-1]
+    if len(parts) >= 3 and parts[-3:] and parts[-2] == "files":
+        return parts[-1]
+
+    return parts[-1]  # fallback
+
+
+@app.get("/files/<file_id>")
+@login_required
+def file_download(file_id: str):
+    br = requests.get(
+        backend_url(f"/api/files/{file_id}"),
+        params={"user_token": session["user_token"]},
+        stream=True,
+        timeout=TIMEOUT,
+    )
+
+    if br.status_code >= 400:
+        flash(f"Скачать не получилось: {br.status_code}", "error")
+        return redirect(request.referrer or url_for("tasks_list"))
+
+    content_type = br.headers.get("content-type", "application/octet-stream")
+    content_disp = br.headers.get("content-disposition")
+
+    def generate():
+        for chunk in br.iter_content(chunk_size=8192):
+            if chunk:
+                yield chunk
+
+    headers = {}
+    if content_disp:
+        headers["Content-Disposition"] = content_disp
+
+    return Response(generate(), headers=headers, content_type=content_type)
+
+@app.post("/files/<file_id>/delete")
+@login_required
+def file_delete(file_id: str):
+    task_id = request.form.get("task_id", "").strip()
+
+    # 1) Удаляем файл (и запись files)
+    r = requests.delete(
+        backend_url(f"/api/files/{file_id}"),
+        params={"user_token": session["user_token"]},
+        timeout=TIMEOUT,
+    )
+    data = r.json() if "application/json" in r.headers.get("content-type", "") else {"raw": r.text}
+
+    if not (isinstance(data, dict) and data.get("result") is True):
+        flash(f"Удаление файла: {data}", "error")
+        return redirect(request.referrer or url_for("tasks_list"))
+
+    # 2) Если знаем task_id — отвязываем файл от задачи
+    if task_id:
+        pr = call_backend("PATCH", f"/tasks/{task_id}", json={"attachment": None})
+        pdata = pr.json() if "application/json" in pr.headers.get("content-type", "") else {"raw": pr.text}
+
+        if isinstance(pdata, dict) and pdata.get("result") is True:
+            flash("Файл удалён и откреплён ✅", "ok")
+        else:
+            flash(f"Файл удалён, но не открепился от задачи: {pdata}", "error")
+    else:
+        flash("Файл удалён ✅", "ok")
+
+    return redirect(request.referrer or url_for("tasks_list"))
+
+
+
 if __name__ == "__main__":
+    app.jinja_env.globals.update(file_id_from_attachment=file_id_from_attachment)
     app.run(debug=True, port=5000)

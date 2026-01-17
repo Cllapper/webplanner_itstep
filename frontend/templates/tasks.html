@@ -33,24 +33,49 @@
       <div>Due</div>
       <div>Done</div>
       <div>Sub</div>
-      <div>Tags</div>
+      <div>Теги</div>
+      <div>Файл</div>
       <div>ID</div>
       <div></div>
     </div>
 
     {% for t in tasks %}
       {% set subs = t.get("subtasks") or [] %}
+      {% set tags = t.get("tags") or [] %}
+      {% set att = t.get("attachment") %}
+      {% set fid = file_id_from_attachment(att) if att else None %}
+
       <div class="tr">
         <div class="title">{{ t.get("title","") }}</div>
         <div>{{ t.get("priority","") }}</div>
         <div class="muted small">{{ t.get("due_date","") or "-" }}</div>
         <div>{{ "✅" if t.get("done") else "—" }}</div>
         <div class="muted small">{{ subs|length }}</div>
+
         <div class="muted small">
-          {% set tags = t.get("tags") or [] %}
           {{ ", ".join(tags) if tags else "-" }}
         </div>
+
+        <div class="muted small">
+          {% if att %}
+            {% if fid %}
+              <a href="{{ url_for('file_download', file_id=fid) }}">
+                {{ att.get("filename","file") }}
+              </a>
+              <form method="post" action="{{ url_for('file_delete', file_id=fid) }}" style="display:inline;">
+                <input type="hidden" name="task_id" value="{{ t.get('_id','') }}">
+                <button type="submit" title="Удалить файл">x</button>
+              </form>
+            {% else %}
+              {{ att.get("filename","file") }}
+            {% endif %}
+          {% else %}
+            -
+          {% endif %}
+        </div>
+
         <div class="muted small">{{ t.get("_id","") }}</div>
+
         <div class="row">
           <a class="btn"
              href="{{ url_for('task_edit_form', task_id=t.get('_id',''), view=view, date=d) }}">Edit</a>

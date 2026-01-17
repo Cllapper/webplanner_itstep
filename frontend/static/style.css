@@ -28,3 +28,5 @@ button, .btn { padding: 8px 12px; border: 1px solid #bbb; background: #eee; curs
 .subrow { display: flex; gap: 8px; align-items: center; }
 .subtitle { flex: 1; min-width: 200px; }
 .grow { flex: 1; }
+a { color: #111; }
+a:hover { text-decoration: underline; }
