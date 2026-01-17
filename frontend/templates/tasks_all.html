@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="row space">
+  <h2 style="margin:0;">Все задачи</h2>
+  <a class="btn" href="{{ url_for('task_new_form') }}">+ Новая</a>
+</div>
+
+<form class="box row space" method="get" action="{{ url_for('tasks_all') }}">
+  <label>Год от
+    <input type="number" name="year_from" value="{{ year_from }}" min="1970" max="2100">
+  </label>
+  <label>Год до
+    <input type="number" name="year_to" value="{{ year_to }}" min="1970" max="2100">
+  </label>
+  <button type="submit">Показать</button>
+</form>
+
+{% if not tasks %}
+  <p class="muted">Ничего не найдено в этом диапазоне. (Если у задач нет due_date — они не попадут.)</p>
+{% else %}
+  <div class="table">
+    <div class="tr th">
+      <div>Название</div>
+      <div>Pri</div>
+      <div>Due</div>
+      <div>Done</div>
+      <div>Sub</div>
+      <div>Tags</div>
+      <div>ID</div>
+      <div></div>
+    </div>
+
+    {% for t in tasks %}
+      {% set subs = t.get("subtasks") or [] %}
+      <div class="tr">
+        <div class="title">{{ t.get("title","") }}</div>
+        <div>{{ t.get("priority","") }}</div>
+        <div class="muted small">{{ t.get("due_date","") or "-" }}</div>
+        <div>{{ "✅" if t.get("done") else "—" }}</div>
+        <div class="muted small">{{ subs|length }}</div>
+        <div class="muted small">
+          {% set tags = t.get("tags") or [] %}
+          {{ ", ".join(tags) if tags else "-" }}
+        </div>
+        <div class="muted small">{{ t.get("_id","") }}</div>
+        <div class="row">
+          <!-- Для all не знаем view/date, поэтому просто открываем edit; внутри есть fallback -->
+          <a class="btn" href="{{ url_for('task_edit_form', task_id=t.get('_id','')) }}">Edit</a>
+
+          <form method="post" action="{{ url_for('task_delete', task_id=t.get('_id','')) }}">
+            <button type="submit">Del</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% endblock %}

@@ -1,47 +1,93 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Редактирование задачи (PATCH)</h2>
 
-<form class="box" method="post" action="{{ url_for('task_edit_submit') }}">
-  <label>task_id
-    <input name="task_id" value="{{ task_id }}" required>
-  </label>
+<h2>Редактирование</h2>
+<p class="muted small">ID: {{ task.get("_id") }}</p>
 
-  <p class="muted small">Оставь поле пустым — оно не будет отправлено.</p>
+<form class="box" method="post" action="{{ url_for('task_edit_submit', task_id=task.get('_id')) }}">
+  <!-- чтобы вернуться в тот же период -->
+  <input type="hidden" name="view" value="{{ view }}">
+  <input type="hidden" name="date" value="{{ d }}">
 
   <label>Название
-    <input name="title">
+    <input name="title" value="{{ task.get('title','') }}">
   </label>
 
   <label>Приоритет (1..5)
-    <input name="priority" type="number" min="1" max="5">
+    <input name="priority" type="number" min="1" max="5" value="{{ task.get('priority',3) }}">
   </label>
 
-  <label>Срок (datetime-local)
+  <label>Срок (ISO в списке, но редактировать можно через datetime-local)
     <input name="due_date" type="datetime-local">
+    <div class="muted small">Текущий: {{ task.get("due_date") or "-" }}</div>
   </label>
 
   <label>Описание
-    <textarea name="description" rows="4"></textarea>
+    <textarea name="description" rows="4">{{ task.get('description','') }}</textarea>
   </label>
 
-  <label>Теги через запятую
-    <input name="tags">
+  <label>Теги (через запятую)
+    <input name="tags" value="{{ (task.get('tags') or []) | join(', ') }}">
   </label>
 
   <label>Комментарий
-    <input name="comment">
+    <input name="comment" value="{{ task.get('comment','') }}">
   </label>
 
-  <label>Подзадачи (каждая с новой строки)
-    <textarea name="subtasks" rows="4"></textarea>
+  <label class="row">
+    <!-- hidden + checkbox => можно выставлять и true и false -->
+    <input type="hidden" name="done" value="0">
+    <input type="checkbox" name="done" value="1" {{ "checked" if task.get("done") else "" }}>
+    <span>Выполнено</span>
   </label>
 
-  <label>Done (true/false)
-    <input name="done" placeholder="true или false">
-  </label>
-
-  <button type="submit">Сохранить</button>
-  <a class="btn" href="{{ url_for('dashboard') }}">Назад</a>
+  <button type="submit">Сохранить задачу</button>
 </form>
+
+<h3>Подзадачи</h3>
+
+{% set subs = task.get("subtasks") or [] %}
+{% if not subs %}
+  <p class="muted">Подзадач нет.</p>
+{% else %}
+  <div class="sublist">
+    {% for s in subs %}
+      <div class="subrow">
+        <form class="row" method="post" action="{{ url_for('subtask_edit', task_id=task.get('_id'), subtask_id=s.get('subtask_id')) }}">
+          <input type="hidden" name="view" value="{{ view }}">
+          <input type="hidden" name="date" value="{{ d }}">
+
+          <input name="title" value="{{ s.get('title','') }}" class="subtitle">
+
+          <label class="row">
+            <input type="hidden" name="sub_done" value="0">
+            <input type="checkbox" name="sub_done" value="1" {{ "checked" if s.get("done") else "" }}>
+            <span class="muted small">done</span>
+          </label>
+
+          <button type="submit">💾</button>
+        </form>
+
+        <form method="post" action="{{ url_for('subtask_delete', task_id=task.get('_id'), subtask_id=s.get('subtask_id')) }}">
+          <input type="hidden" name="view" value="{{ view }}">
+          <input type="hidden" name="date" value="{{ d }}">
+          <button type="submit">−</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<form class="box row" method="post" action="{{ url_for('subtask_add', task_id=task.get('_id')) }}">
+  <input type="hidden" name="view" value="{{ view }}">
+  <input type="hidden" name="date" value="{{ d }}">
+
+  <input name="title" placeholder="Новая подзадача..." class="grow">
+  <button type="submit">+</button>
+</form>
+
+<div class="row" style="margin-top:12px;">
+  <a class="btn" href="{{ url_for('tasks_list', view=view, date=d) }}">Назад</a>
+</div>
+
 {% endblock %}

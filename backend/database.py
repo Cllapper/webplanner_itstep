@@ -6,7 +6,7 @@ import uuid
 from bson import ObjectId
 from bson.errors import InvalidId
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def _dt_now_iso() -> str:
     return datetime.utcnow().isoformat()
@@ -172,3 +172,70 @@ class DBManager:
 
         docs = list(self.tasks.find(query).sort("due_date", 1))
         return [self._serialize_task(d) for d in docs]
+
+
+
+    def add_subtask(self, user_id: str, task_id: str, title: str) -> dict:
+        try:
+            oid = ObjectId(task_id)
+        except (InvalidId, TypeError):
+            return {"ok": False, "error": "Invalid task_id"}
+
+        sub = {"subtask_id": str(uuid.uuid4()), "title": title, "done": False}
+
+        res = self.tasks.update_one(
+            {"_id": oid, "user_id": user_id},
+            {"$push": {"subtasks": sub}, "$set": {"updated_at": _dt_now_iso()}}
+        )
+        if res.matched_count == 0:
+            return {"ok": False, "error": "Task not found (or not yours)"}
+
+        return {"ok": True, "subtask_id": sub["subtask_id"]}
+
+    def edit_subtask(self, user_id: str, task_id: str, subtask_id: str, updates: dict) -> dict:
+        try:
+            oid = ObjectId(task_id)
+        except (InvalidId, TypeError):
+            return {"ok": False, "error": "Invalid task_id"}
+
+        set_fields = {}
+        if "title" in updates and updates["title"] is not None:
+            set_fields["subtasks.$[s].title"] = updates["title"]
+        if "done" in updates and updates["done"] is not None:
+            set_fields["subtasks.$[s].done"] = updates["done"]
+
+        if not set_fields:
+            return {"ok": False, "error": "No fields to update"}
+
+        set_fields["updated_at"] = _dt_now_iso()
+
+        res = self.tasks.update_one(
+            {"_id": oid, "user_id": user_id},
+            {"$set": set_fields},
+            array_filters=[{"s.subtask_id": subtask_id}]
+        )
+
+        if res.matched_count == 0:
+            return {"ok": False, "error": "Task not found (or not yours)"}
+        if res.modified_count == 0:
+            return {"ok": False, "error": "Subtask not found"}
+
+        return {"ok": True, "modified": res.modified_count}
+
+    def delete_subtask(self, user_id: str, task_id: str, subtask_id: str) -> dict:
+        try:
+            oid = ObjectId(task_id)
+        except (InvalidId, TypeError):
+            return {"ok": False, "error": "Invalid task_id"}
+
+        res = self.tasks.update_one(
+            {"_id": oid, "user_id": user_id},
+            {"$pull": {"subtasks": {"subtask_id": subtask_id}}, "$set": {"updated_at": _dt_now_iso()}}
+        )
+
+        if res.matched_count == 0:
+            return {"ok": False, "error": "Task not found (or not yours)"}
+        if res.modified_count == 0:
+            return {"ok": False, "error": "Subtask not found"}
+
+        return {"ok": True}

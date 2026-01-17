@@ -1,16 +1,23 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
-
+import uuid
 
 class user_auth(BaseModel):
     username: str
     password: str
 
 class SubTask(BaseModel):
+    subtask_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     title: str
     done: bool = False
 
+class SubTaskCreate(BaseModel):
+    title: str
+
+class SubTaskUpdate(BaseModel):
+    title: Optional[str] = None
+    done: Optional[bool] = None
 
 class Attachment(BaseModel):
     filename: str

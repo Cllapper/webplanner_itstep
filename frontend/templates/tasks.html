@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="row space">
+  <h2 style="margin:0;">Задачи (по периоду)</h2>
+  <a class="btn" href="{{ url_for('task_new_form') }}">+ Новая</a>
+</div>
+
+<form class="box row space" method="get" action="{{ url_for('tasks_list') }}">
+  <label>Вид
+    <select name="view">
+      <option value="day"   {{ "selected" if view=="day" else "" }}>День</option>
+      <option value="week"  {{ "selected" if view=="week" else "" }}>Неделя</option>
+      <option value="month" {{ "selected" if view=="month" else "" }}>Месяц</option>
+      <option value="year"  {{ "selected" if view=="year" else "" }}>Год</option>
+    </select>
+  </label>
+
+  <label>Дата
+    <input type="date" name="date" value="{{ d }}">
+  </label>
+
+  <button type="submit">Показать</button>
+</form>
+
+{% if not tasks %}
+  <p class="muted">Нет задач для выбранного периода.</p>
+{% else %}
+  <div class="table">
+    <div class="tr th">
+      <div>Название</div>
+      <div>Pri</div>
+      <div>Due</div>
+      <div>Done</div>
+      <div>Sub</div>
+      <div>Tags</div>
+      <div>ID</div>
+      <div></div>
+    </div>
+
+    {% for t in tasks %}
+      {% set subs = t.get("subtasks") or [] %}
+      <div class="tr">
+        <div class="title">{{ t.get("title","") }}</div>
+        <div>{{ t.get("priority","") }}</div>
+        <div class="muted small">{{ t.get("due_date","") or "-" }}</div>
+        <div>{{ "✅" if t.get("done") else "—" }}</div>
+        <div class="muted small">{{ subs|length }}</div>
+        <div class="muted small">
+          {% set tags = t.get("tags") or [] %}
+          {{ ", ".join(tags) if tags else "-" }}
+        </div>
+        <div class="muted small">{{ t.get("_id","") }}</div>
+        <div class="row">
+          <a class="btn"
+             href="{{ url_for('task_edit_form', task_id=t.get('_id',''), view=view, date=d) }}">Edit</a>
+
+          <form method="post" action="{{ url_for('task_delete', task_id=t.get('_id','')) }}">
+            <button type="submit">Del</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% endblock %}

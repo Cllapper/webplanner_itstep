@@ -1,14 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Регистрация</h2>
-
 <form class="box" method="post" action="{{ url_for('register_submit') }}">
-  <label>Логин
-    <input name="username" required>
-  </label>
-  <label>Пароль
-    <input type="password" name="password" required>
-  </label>
-  <button type="submit">Создать аккаунт</button>
+  <label>Логин <input name="username" required></label>
+  <label>Пароль <input type="password" name="password" required></label>
+  <button type="submit">Создать</button>
 </form>
 {% endblock %}

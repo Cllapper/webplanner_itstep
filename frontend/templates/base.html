@@ -14,7 +14,8 @@
       <div class="row">
         {% if is_logged_in %}
           <span class="muted small">{{ user.username if user else "" }}</span>
-          <a class="btn" href="{{ url_for('dashboard') }}">Панель</a>
+          <a class="btn" href="{{ url_for('tasks_list') }}">Период</a>
+          <a class="btn" href="{{ url_for('tasks_all') }}">Все задачи</a>
           <a class="btn" href="{{ url_for('logout') }}">Выйти</a>
         {% else %}
           <a class="btn" href="{{ url_for('login') }}">Войти</a>
@@ -33,9 +34,7 @@
       {% endif %}
     {% endwith %}
 
-    <main>
-      {% block content %}{% endblock %}
-    </main>
+    <main>{% block content %}{% endblock %}</main>
   </div>
 </body>
 </html>
