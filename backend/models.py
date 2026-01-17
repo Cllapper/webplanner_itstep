@@ -28,3 +28,14 @@ class TaskCreate(BaseModel):
     comment: Optional[str] = Field(None, max_length=2000) # коментар до задачі
     subtasks: List[SubTask] = Field(default_factory=list) # список підзадач (якщо порожній — задача “кінцева”)
     attachment: Optional[Attachment] = None # прикріплений файл (метаінфа)
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    priority: Optional[int] = Field(None, ge=1, le=5)
+    due_date: Optional[datetime] = None
+    description: Optional[str] = Field(None, max_length=5000)
+    tags: Optional[List[str]] = None
+    comment: Optional[str] = Field(None, max_length=2000)
+    subtasks: Optional[List[SubTask]] = None
+    attachment: Optional[Attachment] = None
+    done: Optional[bool] = None

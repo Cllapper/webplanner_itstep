@@ -9,18 +9,19 @@ from datetime import datetime
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 
 
-def post_json(url: str, payload: dict, timeout: int = 8) -> tuple[int, dict]:
+def request_json(method: str, url: str, payload: dict | None = None, timeout: int = 10) -> tuple[int, dict]:
     """
-    Делает POST JSON и возвращает (status_code, json_dict).
-    Если сервер вернул не-JSON, вернёт {"raw": "..."}.
+    Делает HTTP запрос (POST/PATCH/DELETE/GET) с JSON телом (если нужно).
+    Возвращает (status_code, dict). Если ответ не JSON -> {"raw": "..."}.
     """
-    data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+    data = None
+    headers = {}
+
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
 
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -74,7 +75,7 @@ def parse_due_date(s: str | None) -> str | None:
       - None / пусто -> None
       - "YYYY-MM-DD" -> "YYYY-MM-DDT00:00:00"
       - "YYYY-MM-DD HH:MM" -> "YYYY-MM-DDTHH:MM:00"
-      - "YYYY-MM-DDTHH:MM:SS" -> как есть (если валидно)
+      - "YYYY-MM-DDTHH:MM:SS" -> как есть
     Возвращает ISO строку или None.
     """
     if not s:
@@ -82,7 +83,7 @@ def parse_due_date(s: str | None) -> str | None:
 
     s = s.strip()
 
-    # Попробуем уже ISO
+    # Уже ISO?
     try:
         dt = datetime.fromisoformat(s)
         return dt.isoformat()
@@ -103,30 +104,44 @@ def parse_due_date(s: str | None) -> str | None:
     except ValueError:
         pass
 
-    print("Не смог распарсить due_date. Оставил пустым. Примеры: 2026-01-20 или 2026-01-20 18:30")
+    print("Не смог распарсить due_date. Примеры: 2026-01-20 или 2026-01-20 18:30")
     return None
 
 
-def action_register(base_url: str):
+def ensure_logged_in(state: dict) -> bool:
+    if not state.get("token"):
+        print("❌ Сначала войди в аккаунт (пункт 2).")
+        return False
+    return True
+
+
+def action_register(state: dict):
     print("\n=== Регистрация ===")
     username = input_nonempty("Username: ")
     password = getpass("Password: ")
 
-    status, data = post_json(f"{base_url}/registration", {"username": username, "password": password})
+    status, data = request_json("POST", f"{state['base_url']}/registration", {"username": username, "password": password})
     print(f"HTTP: {status}")
     print("Ответ:", data)
 
 
-def action_login(base_url: str, state: dict):
+def action_login(state: dict):
     print("\n=== Вход ===")
     username = input_nonempty("Username: ")
     password = getpass("Password: ")
 
-    status, data = post_json(f"{base_url}/login", {"username": username, "password": password})
+    status, data = request_json("POST", f"{state['base_url']}/login", {"username": username, "password": password})
     print(f"HTTP: {status}")
     print("Ответ:", data)
 
-    if status == 200 and isinstance(data, dict) and data.get("ok") is True and "token" in data:
+    # Совместимо с:
+    # {"ok": true, "token": "..."} или {"result": true, "token": "..."}
+    ok = False
+    if isinstance(data, dict) and "token" in data:
+        if data.get("ok") is True or data.get("result") is True:
+            ok = True
+
+    if status == 200 and ok:
         state["user"] = username
         state["token"] = data["token"]
         print(f"✅ Успешный вход как: {username}")
@@ -137,6 +152,8 @@ def action_login(base_url: str, state: dict):
         print("❌ Вход не выполнен.")
         if isinstance(data, dict) and data.get("error"):
             print("Причина:", data["error"])
+        elif isinstance(data, dict) and isinstance(data.get("result"), str):
+            print("Причина:", data["result"])
 
 
 def action_whoami(state: dict):
@@ -155,12 +172,9 @@ def action_set_url(state: dict):
     print("BASE_URL установлен:", state["base_url"])
 
 
-def action_create_task(base_url: str, state: dict):
+def action_create_task(state: dict):
     print("\n=== Создать таску ===")
-
-    token = state.get("token")
-    if not token:
-        print("❌ Сначала войди в аккаунт (пункт 2).")
+    if not ensure_logged_in(state):
         return
 
     title = input_nonempty("Title: ")
@@ -169,11 +183,9 @@ def action_create_task(base_url: str, state: dict):
     due_date = parse_due_date(due_raw)
     description = input_optional("Description [enter = пусто]: ")
     comment = input_optional("Comment [enter = пусто]: ")
-
     tags_raw = input_optional("Tags через пробел (например #study #work) [enter = пусто]: ")
     tags = tags_raw.split() if tags_raw else []
 
-    # Подзадачи
     subtasks = []
     add_sub = input_optional("Добавить подзадачи? (y/n) [enter = n]: ")
     if add_sub and add_sub.lower().startswith("y"):
@@ -194,11 +206,91 @@ def action_create_task(base_url: str, state: dict):
         "attachment": None,
     }
 
-    # Твой эндпоинт ждёт token как query параметр: /tasks?user_token=...
-    # (лучше потом переделаешь на Authorization header, но под текущий код делаем так)
-    url = f"{base_url}/tasks?{urllib.parse.urlencode({'user_token': token})}"
+    url = f"{state['base_url']}/tasks?{urllib.parse.urlencode({'user_token': state['token']})}"
+    status, data = request_json("POST", url, payload)
+    print(f"HTTP: {status}")
+    print("Ответ:", data)
 
-    status, data = post_json(url, payload)
+    # если сервер вернул task_id — покажем
+    if isinstance(data, dict) and data.get("task_id"):
+        print("✅ Task ID:", data["task_id"])
+
+
+def action_edit_task(state: dict):
+    print("\n=== Редактировать таску (PATCH) ===")
+    if not ensure_logged_in(state):
+        return
+
+    task_id = input_nonempty("Task ID: ")
+
+    print("Оставь поле пустым, если не хочешь менять.")
+    title = input_optional("New title: ")
+    prio_raw = input_optional("New priority (1..5): ")
+    due_raw = input_optional("New due_date (YYYY-MM-DD или YYYY-MM-DD HH:MM): ")
+    desc = input_optional("New description: ")
+    comment = input_optional("New comment: ")
+    tags_raw = input_optional("New tags через пробел (например #a #b): ")
+    done_raw = input_optional("Done? (true/false): ")
+
+    updates = {}
+
+    if title is not None:
+        updates["title"] = title
+
+    if prio_raw is not None:
+        try:
+            p = int(prio_raw)
+            if 1 <= p <= 5:
+                updates["priority"] = p
+            else:
+                print("priority вне 1..5 — пропускаю")
+        except ValueError:
+            print("priority не число — пропускаю")
+
+    if due_raw is not None:
+        updates["due_date"] = parse_due_date(due_raw)
+
+    if desc is not None:
+        updates["description"] = desc
+
+    if comment is not None:
+        updates["comment"] = comment
+
+    if tags_raw is not None:
+        updates["tags"] = tags_raw.split() if tags_raw else []
+
+    if done_raw is not None:
+        v = done_raw.strip().lower()
+        if v in ("true", "1", "yes", "y"):
+            updates["done"] = True
+        elif v in ("false", "0", "no", "n"):
+            updates["done"] = False
+        else:
+            print("done не распознан (true/false) — пропускаю")
+
+    if not updates:
+        print("❌ Нечего обновлять.")
+        return
+
+    url = f"{state['base_url']}/tasks/{task_id}?{urllib.parse.urlencode({'user_token': state['token']})}"
+    status, data = request_json("PATCH", url, updates)
+    print(f"HTTP: {status}")
+    print("Ответ:", data)
+
+
+def action_delete_task(state: dict):
+    print("\n=== Удалить таску (DELETE) ===")
+    if not ensure_logged_in(state):
+        return
+
+    task_id = input_nonempty("Task ID: ")
+    confirm = input_optional("Точно удалить? (y/n) [enter = n]: ")
+    if not (confirm and confirm.lower().startswith("y")):
+        print("Отмена.")
+        return
+
+    url = f"{state['base_url']}/tasks/{task_id}?{urllib.parse.urlencode({'user_token': state['token']})}"
+    status, data = request_json("DELETE", url, payload=None)
     print(f"HTTP: {status}")
     print("Ответ:", data)
 
@@ -210,6 +302,8 @@ def menu():
     print("3) Кто я?")
     print("4) Поменять BASE_URL")
     print("5) Создать таску")
+    print("6) Редактировать таску (PATCH)")
+    print("7) Удалить таску (DELETE)")
     print("0) Выход")
 
 
@@ -230,20 +324,24 @@ def main():
         choice = input("Выбор: ").strip()
 
         if choice == "1":
-            action_register(state["base_url"])
+            action_register(state)
         elif choice == "2":
-            action_login(state["base_url"], state)
+            action_login(state)
         elif choice == "3":
             action_whoami(state)
         elif choice == "4":
             action_set_url(state)
         elif choice == "5":
-            action_create_task(state["base_url"], state)
+            action_create_task(state)
+        elif choice == "6":
+            action_edit_task(state)
+        elif choice == "7":
+            action_delete_task(state)
         elif choice == "0":
             print("Пока!")
             break
         else:
-            print("Не понял. Введи 0-5.")
+            print("Не понял. Введи 0-7.")
 
 
 if __name__ == "__main__":

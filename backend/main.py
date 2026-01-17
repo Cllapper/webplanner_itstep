@@ -54,3 +54,36 @@ def create_task(payload: models.TaskCreate, user_token: str):
 
     task_id = db.create_task(user_id=str(user["_id"]), task_data=payload.model_dump())
     return {"task_id": task_id}
+
+
+@app.patch("/tasks/{task_id}")
+def edit_task(task_id: str, payload: models.TaskUpdate, user_token: str):
+    user = db.get_user_by_token(user_token)
+    if user is None:
+        return {"result": "User token is incorrect"}
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    if not updates:
+        return {"result": "No fields to update"}
+
+    result = db.edit_task(user_id=str(user["_id"]), task_id=task_id, updates=updates)
+
+    if not result.get("ok"):
+        return {"result": result.get("error", "Edit failed")}
+
+    return {"result": True, "modified": result.get("modified", 0)}
+
+
+@app.delete("/tasks/{task_id}")
+def delete_task(task_id: str, user_token: str):
+    user = db.get_user_by_token(user_token)
+    if user is None:
+        return {"result": "User token is incorrect"}
+
+    result = db.delete_task(user_id=str(user["_id"]), task_id=task_id)
+
+    if not result.get("ok"):
+        return {"result": result.get("error", "Delete failed")}
+
+    return {"result": True, "deleted": result.get("deleted", 0)}
