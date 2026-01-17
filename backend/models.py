@@ -1,0 +1,30 @@
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+
+
+class user_auth(BaseModel):
+    username: str
+    password: str
+
+class SubTask(BaseModel):
+    title: str
+    done: bool = False
+
+
+class Attachment(BaseModel):
+    filename: str
+    url: str                      # наприклад: "/files/abc123.pdf" або S3 URL
+    content_type: Optional[str] = None
+    size_bytes: Optional[int] = None
+
+
+class TaskCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    priority: int = Field(3, ge=1, le=5)
+    due_date: Optional[datetime] = None # дата закінчення (ISO-формат краще), наприклад "2026-01-20T18:00:00"
+    description: Optional[str] = Field(None, max_length=5000)
+    tags: List[str] = Field(default_factory=list)
+    comment: Optional[str] = Field(None, max_length=2000) # коментар до задачі
+    subtasks: List[SubTask] = Field(default_factory=list) # список підзадач (якщо порожній — задача “кінцева”)
+    attachment: Optional[Attachment] = None # прикріплений файл (метаінфа)
