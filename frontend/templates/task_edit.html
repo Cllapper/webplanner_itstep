@@ -49,9 +49,15 @@
       <span class="muted small">{{ att.get("filename","file") }}</span>
       {% if fid %}
         <a class="btn" href="{{ url_for('file_download', file_id=fid) }}">Скачать</a>
-        <form method="post" action="{{ url_for('file_delete', file_id=fid) }}" style="display:inline;">
-            <button type="submit" title="Удалить файл">Удалить файл</button>
-          </form>
+        <input type="hidden" name="task_id" value="{{ task.get('_id') }}">
+
+        <button
+          type="submit"
+          formaction="{{ url_for('file_delete', file_id=fid) }}"
+          formmethod="post"
+          title="Удалить файл">
+          Удалить файл
+        </button>
       {% endif %}
     </div>
 
