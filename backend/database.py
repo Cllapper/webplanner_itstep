@@ -116,3 +116,59 @@ class DBManager:
             return {"ok": False, "error": "Task not found (or not yours)"}
 
         return {"ok": True, "deleted": res.deleted_count}
+
+
+    def _serialize_task(self, doc: dict) -> dict:
+        """Сделать документ JSON-совместимым."""
+        d = dict(doc)
+        if "_id" in d:
+            d["_id"] = str(d["_id"])
+        for k in ("due_date", "created_at", "updated_at"):
+            if isinstance(d.get(k), datetime):
+                d[k] = d[k].isoformat()
+        return d
+    def get_tasks_view(self, user_id: str, view: str, date_str: str) -> list[dict]:
+        """
+        view: day | week | month | year
+        date_str: 'YYYY-MM-DD'
+        Возвращает список задач пользователя, у которых due_date попадает в выбранный диапазон.
+        """
+        try:
+            base = datetime.strptime(date_str, "%Y-%m-%d")  # 00:00:00
+        except ValueError:
+            # неправильная дата
+            return []
+
+        view = (view or "day").lower()
+
+        if view == "day":
+            start = base
+            end = base + timedelta(days=1)
+
+        elif view == "week":
+            # неделя с понедельника
+            start = base - timedelta(days=base.weekday())
+            end = start + timedelta(days=7)
+
+        elif view == "month":
+            start = base.replace(day=1)
+            if start.month == 12:
+                end = start.replace(year=start.year + 1, month=1)
+            else:
+                end = start.replace(month=start.month + 1)
+
+        elif view == "year":
+            start = base.replace(month=1, day=1)
+            end = start.replace(year=start.year + 1)
+
+        else:
+            # неизвестный view
+            return []
+
+        query = {
+            "user_id": user_id,
+            "due_date": {"$gte": start, "$lt": end}
+        }
+
+        docs = list(self.tasks.find(query).sort("due_date", 1))
+        return [self._serialize_task(d) for d in docs]

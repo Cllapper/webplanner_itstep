@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Панель</h2>
+
+<div class="row">
+  <a class="btn" href="{{ url_for('task_new_form') }}">+ Создать задачу</a>
+  <a class="btn" href="{{ url_for('task_edit_form') }}">Редактировать по ID</a>
+</div>
+
+<h3>Удалить задачу по ID</h3>
+<form class="box" method="post" action="{{ url_for('task_delete') }}">
+  <label>task_id
+    <input name="task_id" required>
+  </label>
+  <button type="submit">Удалить</button>
+</form>
+
+<h3>Созданные (локально сохранённые) task_id</h3>
+{% if not created %}
+  <p class="muted">Пока нет созданных задач.</p>
+{% else %}
+  <ul class="list">
+    {% for t in created %}
+      <li class="item">
+        <b>{{ t.title }}</b>
+        <div class="muted small">id: {{ t.task_id }}</div>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+{% endblock %}

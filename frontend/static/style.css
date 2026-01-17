@@ -1,0 +1,23 @@
+body { font-family: Arial, sans-serif; margin: 0; background: #fafafa; }
+.wrap { max-width: 900px; margin: 0 auto; padding: 16px; }
+
+.top { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; }
+.brand { text-decoration: none; font-weight: bold; color: #111; }
+
+.box { background: #fff; border: 1px solid #ddd; padding: 12px; border-radius: 6px; }
+label { display: block; margin: 10px 0; }
+input, textarea { width: 100%; padding: 8px; box-sizing: border-box; }
+
+button, .btn { padding: 8px 12px; border: 1px solid #bbb; background: #eee; cursor: pointer; text-decoration: none; color: #111; border-radius: 4px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.muted { color: #666; }
+.small { font-size: 12px; }
+
+.alerts { margin: 10px 0; }
+.alert { padding: 8px 10px; border-radius: 6px; margin-bottom: 6px; }
+.alert.ok { background: #e7ffe7; border: 1px solid #a8e5a8; }
+.alert.error { background: #ffe7e7; border: 1px solid #e5a8a8; }
+
+.list { list-style: none; padding: 0; }
+.item { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 10px; margin: 8px 0; }

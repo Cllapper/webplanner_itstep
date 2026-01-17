@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Новая задача</h2>
+
+<form class="box" method="post" action="{{ url_for('task_new_submit') }}">
+  <label>Название
+    <input name="title" required>
+  </label>
+
+  <label>Приоритет (1..5)
+    <input name="priority" type="number" min="1" max="5" value="3">
+  </label>
+
+  <label>Срок (datetime-local, опционально)
+    <input name="due_date" type="datetime-local">
+  </label>
+
+  <label>Описание (опционально)
+    <textarea name="description" rows="4"></textarea>
+  </label>
+
+  <label>Теги через запятую (опционально)
+    <input name="tags" placeholder="учёба, курсовая">
+  </label>
+
+  <label>Комментарий (опционально)
+    <input name="comment">
+  </label>
+
+  <label>Подзадачи (каждая с новой строки, опционально)
+    <textarea name="subtasks" rows="4" placeholder="Сделать верстку&#10;Подключить БД"></textarea>
+  </label>
+
+  <button type="submit">Создать</button>
+  <a class="btn" href="{{ url_for('dashboard') }}">Назад</a>
+</form>
+{% endblock %}

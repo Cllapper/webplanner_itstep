@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Редактирование задачи (PATCH)</h2>
+
+<form class="box" method="post" action="{{ url_for('task_edit_submit') }}">
+  <label>task_id
+    <input name="task_id" value="{{ task_id }}" required>
+  </label>
+
+  <p class="muted small">Оставь поле пустым — оно не будет отправлено.</p>
+
+  <label>Название
+    <input name="title">
+  </label>
+
+  <label>Приоритет (1..5)
+    <input name="priority" type="number" min="1" max="5">
+  </label>
+
+  <label>Срок (datetime-local)
+    <input name="due_date" type="datetime-local">
+  </label>
+
+  <label>Описание
+    <textarea name="description" rows="4"></textarea>
+  </label>
+
+  <label>Теги через запятую
+    <input name="tags">
+  </label>
+
+  <label>Комментарий
+    <input name="comment">
+  </label>
+
+  <label>Подзадачи (каждая с новой строки)
+    <textarea name="subtasks" rows="4"></textarea>
+  </label>
+
+  <label>Done (true/false)
+    <input name="done" placeholder="true или false">
+  </label>
+
+  <button type="submit">Сохранить</button>
+  <a class="btn" href="{{ url_for('dashboard') }}">Назад</a>
+</form>
+{% endblock %}
